@@ -4,8 +4,12 @@ import { redirect } from "next/navigation";
 
 const navigation = ["Dashboard", "Kunden", "Verträge", "Einstellungen"];
 
-export default function AppLayout({ children }: { children: ReactNode }) {
-  const cookieStore = cookies();
+export default async function AppLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const cookieStore = await cookies();
   const accessToken = cookieStore.get("sb-access-token")?.value;
 
   if (!accessToken) {
@@ -29,11 +33,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
       </aside>
+
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-950">
           <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
             Übersicht
           </div>
+
           <form action="/app/logout" method="post">
             <button
               type="submit"
@@ -43,6 +49,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </button>
           </form>
         </header>
+
         <main className="flex-1 px-6 py-10">{children}</main>
       </div>
     </div>
