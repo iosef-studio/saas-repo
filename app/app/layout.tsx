@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { ensureUserHasOrgMembership } from "@/lib/org/server";
 
 const navigation = ["Dashboard", "Kunden", "Verträge", "Einstellungen"];
 
@@ -15,6 +16,8 @@ export default async function AppLayout({
   if (!accessToken) {
     redirect("/login");
   }
+
+  const activeOrgId = await ensureUserHasOrgMembership();
 
   return (
     <div className="flex min-h-screen bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-50">
@@ -37,7 +40,7 @@ export default async function AppLayout({
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-950">
           <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            Übersicht
+            Übersicht{activeOrgId ? ` · Org ${activeOrgId.slice(0, 8)}` : ""}
           </div>
 
           <form action="/app/logout" method="post">
