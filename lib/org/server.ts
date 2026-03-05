@@ -1,145 +1,67 @@
 import "server-only";
 
-import { cookies } from "next/headers";
-import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/auth";
+import { createClient } from "@/lib/supabase/auth";
 
-type SupabaseUserResponse = { id: string };
 type MembershipRow = { org_id: string };
 type OrgRow = { id: string };
 
-function getAccessTokenFromCookies() {
-  return cookies().then((store) => store.get("sb-access-token")?.value ?? null);
-}
+export async function getActiveOrgId(): Promise<string | null> {
+  const supabase = await createClient();
 
-function getAuthHeaders(accessToken: string) {
-  return {
-    apikey: supabaseAnonKey,
-    Authorization: `Bearer ${accessToken}`,
-    "Content-Type": "application/json",
-  } as const;
-}
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-function getRestUrl(path: string) {
-  return `${supabaseUrl.replace(/\/$/, "")}/rest/v1/${path}`;
-}
-
-function getAuthUrl(path: string) {
-  return `${supabaseUrl.replace(/\/$/, "")}/auth/v1/${path}`;
-}
-
-async function getAuthenticatedUserId(accessToken: string) {
-  const response = await fetch(getAuthUrl("user"), {
-    method: "GET",
-    headers: getAuthHeaders(accessToken),
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
+  if (!user) {
     return null;
   }
 
-  const user = (await response.json()) as SupabaseUserResponse;
-  return user.id ?? null;
+  const { data: memberships } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  return (memberships as MembershipRow[] | null)?.[0]?.org_id ?? null;
 }
 
-export async function getActiveOrgId() {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return null;
-  }
-
-  const accessToken = await getAccessTokenFromCookies();
-
-  if (!accessToken) {
-    return null;
-  }
-
-  const userId = await getAuthenticatedUserId(accessToken);
-
-  if (!userId) {
-    return null;
-  }
-
-  const membershipsResponse = await fetch(
-    getRestUrl(
-      `org_members?select=org_id&user_id=eq.${userId}&order=created_at.asc&limit=1`,
-    ),
-    {
-      method: "GET",
-      headers: getAuthHeaders(accessToken),
-      cache: "no-store",
-    },
-  );
-
-  if (!membershipsResponse.ok) {
-    return null;
-  }
-
-  const memberships = (await membershipsResponse.json()) as MembershipRow[];
-  return memberships[0]?.org_id ?? null;
-}
-
-export async function ensureUserHasOrgMembership() {
+export async function ensureUserHasOrgMembership(): Promise<string | null> {
   const existingOrgId = await getActiveOrgId();
 
   if (existingOrgId) {
     return existingOrgId;
   }
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     return null;
   }
 
-  const accessToken = await getAccessTokenFromCookies();
+  const { data: createdOrgs, error: orgError } = await supabase
+    .from("orgs")
+    .insert({ name: "Meine Organisation" })
+    .select("id");
 
-  if (!accessToken) {
+  if (orgError || !createdOrgs?.[0]) {
     return null;
   }
 
-  const userId = await getAuthenticatedUserId(accessToken);
+  const orgId = (createdOrgs as OrgRow[])[0].id;
 
-  if (!userId) {
-    return null;
-  }
+  const { error: memberError } = await supabase
+    .from("org_members")
+    .upsert(
+      { org_id: orgId, user_id: user.id, role: "owner" },
+      { onConflict: "org_id,user_id" },
+    );
 
-  const createOrgResponse = await fetch(getRestUrl("orgs"), {
-    method: "POST",
-    headers: {
-      ...getAuthHeaders(accessToken),
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify({ name: "Meine Organisation" }),
-    cache: "no-store",
-  });
-
-  if (!createOrgResponse.ok) {
-    return null;
-  }
-
-  const createdOrgs = (await createOrgResponse.json()) as OrgRow[];
-  const orgId = createdOrgs[0]?.id;
-
-  if (!orgId) {
-    return null;
-  }
-
-  const createMembershipResponse = await fetch(
-    getRestUrl("org_members?on_conflict=org_id,user_id"),
-    {
-      method: "POST",
-      headers: {
-        ...getAuthHeaders(accessToken),
-        Prefer: "return=representation,resolution=merge-duplicates",
-      },
-      body: JSON.stringify({
-        org_id: orgId,
-        user_id: userId,
-        role: "owner",
-      }),
-      cache: "no-store",
-    },
-  );
-
-  if (!createMembershipResponse.ok) {
+  if (memberError) {
     return null;
   }
 

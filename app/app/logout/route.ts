@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/auth";
 
 export async function POST(request: Request) {
-  const secure = process.env.NODE_ENV === "production";
-  const response = NextResponse.redirect(new URL("/login", request.url));
-  response.cookies.set("sb-access-token", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure,
-    path: "/",
-    maxAge: 0,
-  });
-  response.cookies.set("sb-refresh-token", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure,
-    path: "/",
-    maxAge: 0,
-  });
+  const supabase = await createClient();
+  await supabase.auth.signOut();
 
-  return response;
+  return NextResponse.redirect(new URL("/login", request.url));
 }
