@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/auth";
 import { ensureUserHasOrgMembership } from "@/lib/org/server";
 
 const navigation = ["Dashboard", "Kunden", "Verträge", "Einstellungen"];
@@ -10,10 +10,13 @@ export default async function AppLayout({
 }: {
   children: ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get("sb-access-token")?.value;
+  // Defense in depth: verify auth even though middleware already checks
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!accessToken) {
+  if (!user) {
     redirect("/login");
   }
 

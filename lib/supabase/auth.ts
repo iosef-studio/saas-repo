@@ -1,14 +1,27 @@
-export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-export const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-export function buildSupabaseAuthUrl(path: string) {
-  return `${supabaseUrl.replace(/\/$/, "")}/auth/v1/${path}`;
-}
+export async function createClient() {
+  const cookieStore = await cookies();
 
-export function getSupabaseAuthHeaders() {
-  return {
-    apikey: supabaseAnonKey,
-    Authorization: `Bearer ${supabaseAnonKey}`,
-    "Content-Type": "application/json",
-  } as const;
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options),
+            );
+          } catch {
+            // Called from a Server Component – middleware handles cookie persistence
+          }
+        },
+      },
+    },
+  );
 }
