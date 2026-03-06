@@ -45,7 +45,7 @@ export async function ensureUserHasOrgMembership(): Promise<string | null> {
 
   const { data: createdOrgs, error: orgError } = await supabase
     .from("orgs")
-    .insert({ name: "Meine Organisation" })
+    .insert({ name: "Meine Organisation", created_by: user.id })
     .select("id");
 
   if (orgError || !createdOrgs?.[0]) {
