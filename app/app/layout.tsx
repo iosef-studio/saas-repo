@@ -2,8 +2,7 @@ import { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/auth";
 import { ensureUserHasOrgMembership } from "@/lib/org/server";
-
-const navigation = ["Dashboard", "Kunden", "Verträge", "Einstellungen"];
+import { SidebarNav } from "./_components/sidebar-nav";
 
 export default async function AppLayout({
   children,
@@ -28,16 +27,7 @@ export default async function AppLayout({
         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
           Project Godspeed
         </div>
-        <nav className="mt-10 space-y-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-          {navigation.map((item) => (
-            <div
-              key={item}
-              className="rounded-full px-4 py-2 text-zinc-900 dark:text-zinc-100"
-            >
-              {item}
-            </div>
-          ))}
-        </nav>
+        <SidebarNav />
       </aside>
 
       <div className="flex flex-1 flex-col">
