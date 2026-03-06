@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/auth";
-import { getActiveOrgId } from "@/lib/org/server";
+import { ensureUserHasOrgMembership } from "@/lib/org/server";
 import type { Client, ClientStatus } from "./types";
 
 const VALID_STATUSES: ClientStatus[] = ["new", "active", "completed", "archived"];
@@ -11,7 +11,7 @@ const VALID_STATUSES: ClientStatus[] = ["new", "active", "completed", "archived"
 type ActionResult = { error: string } | undefined;
 
 export async function listClients(): Promise<Client[]> {
-  const orgId = await getActiveOrgId();
+  const orgId = await ensureUserHasOrgMembership();
   if (!orgId) return [];
 
   const supabase = await createClient();
@@ -27,7 +27,7 @@ export async function listClients(): Promise<Client[]> {
 }
 
 export async function getClient(id: string): Promise<Client | null> {
-  const orgId = await getActiveOrgId();
+  const orgId = await ensureUserHasOrgMembership();
   if (!orgId) return null;
 
   const supabase = await createClient();
@@ -46,8 +46,11 @@ export async function createClientAction(
   _prevState: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
-  const orgId = await getActiveOrgId();
-  if (!orgId) return { error: "Keine Organisation gefunden." };
+  const orgId = await ensureUserHasOrgMembership();
+  if (!orgId) {
+    console.error("[createClientAction] No org after ensureUserHasOrgMembership");
+    return { error: "Organisation konnte nicht erstellt werden. Bitte lade die Seite neu." };
+  }
 
   const name = (formData.get("name") as string | null)?.trim();
   if (!name) return { error: "Name ist erforderlich." };
@@ -72,7 +75,10 @@ export async function createClientAction(
     status,
   });
 
-  if (error) return { error: "Kunde konnte nicht angelegt werden." };
+  if (error) {
+    console.error("[createClientAction] Insert failed:", error.message);
+    return { error: `Kunde konnte nicht angelegt werden: ${error.message}` };
+  }
 
   revalidatePath("/app/clients");
   redirect("/app/clients");
@@ -83,8 +89,10 @@ export async function updateClientAction(
   _prevState: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
-  const orgId = await getActiveOrgId();
-  if (!orgId) return { error: "Keine Organisation gefunden." };
+  const orgId = await ensureUserHasOrgMembership();
+  if (!orgId) {
+    return { error: "Organisation konnte nicht erstellt werden. Bitte lade die Seite neu." };
+  }
 
   const name = (formData.get("name") as string | null)?.trim();
   if (!name) return { error: "Name ist erforderlich." };
@@ -106,7 +114,10 @@ export async function updateClientAction(
     .eq("id", id)
     .eq("org_id", orgId);
 
-  if (error) return { error: "Aenderungen konnten nicht gespeichert werden." };
+  if (error) {
+    console.error("[updateClientAction] Update failed:", error.message);
+    return { error: `Aenderungen konnten nicht gespeichert werden: ${error.message}` };
+  }
 
   revalidatePath("/app/clients");
   revalidatePath(`/app/clients/${id}`);
@@ -114,7 +125,7 @@ export async function updateClientAction(
 }
 
 export async function archiveClientAction(formData: FormData): Promise<void> {
-  const orgId = await getActiveOrgId();
+  const orgId = await ensureUserHasOrgMembership();
   if (!orgId) return;
 
   const id = formData.get("id") as string | null;
