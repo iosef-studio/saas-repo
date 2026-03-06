@@ -1,9 +1,9 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/auth";
 
 type MembershipRow = { org_id: string };
-type OrgRow = { id: string };
 
 export async function getActiveOrgId(): Promise<string | null> {
   const supabase = await createClient();
@@ -49,19 +49,20 @@ export async function ensureUserHasOrgMembership(): Promise<string | null> {
     return null;
   }
 
-  console.log("[ensureUserHasOrgMembership] Bootstrapping org for user:", user.id);
+  // Generate ID client-side to avoid .select() after insert.
+  // The SELECT RLS policy requires org membership, which doesn't exist yet
+  // at this point — so .select("id") would return empty even though the
+  // INSERT succeeded.
+  const orgId = randomUUID();
 
-  const { data: createdOrgs, error: orgError } = await supabase
+  const { error: orgError } = await supabase
     .from("orgs")
-    .insert({ name: "Meine Organisation", created_by: user.id })
-    .select("id");
+    .insert({ id: orgId, name: "Meine Organisation", created_by: user.id });
 
-  if (orgError || !createdOrgs?.[0]) {
-    console.error("[ensureUserHasOrgMembership] Failed to create org:", orgError?.message ?? "No data returned");
+  if (orgError) {
+    console.error("[ensureUserHasOrgMembership] Failed to create org:", orgError.message);
     return null;
   }
-
-  const orgId = (createdOrgs as OrgRow[])[0].id;
 
   const { error: memberError } = await supabase
     .from("org_members")
@@ -75,6 +76,5 @@ export async function ensureUserHasOrgMembership(): Promise<string | null> {
     return null;
   }
 
-  console.log("[ensureUserHasOrgMembership] Org bootstrapped:", orgId);
   return orgId;
 }
